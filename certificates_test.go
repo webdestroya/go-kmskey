@@ -4,8 +4,8 @@ import (
 	"context"
 	"crypto/elliptic"
 	"crypto/rand"
+	"crypto/rsa"
 	"crypto/x509"
-	"encoding/hex"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -98,9 +98,7 @@ func TestCertSigning(t *testing.T) {
 				})
 			}
 
-			certReq := testutils.CertificateTemplate(nil, func(c *x509.Certificate) {
-				// c.AuthorityKeyId = key.Public()
-			})
+			certReq := testutils.CertificateTemplate(nil)
 
 			certBytes, err := x509.CreateCertificate(rand.Reader, certReq, certReq, key.Public(), key)
 			require.NoError(t, err)
@@ -110,11 +108,14 @@ func TestCertSigning(t *testing.T) {
 
 			require.NoError(t, cert.CheckSignatureFrom(cert))
 
-			t.Logf("CAPUBKEY: %v", hex.EncodeToString(cert.SubjectKeyId))
-			t.Logf("CAAuthKey: %v", hex.EncodeToString(cert.AuthorityKeyId))
+			// t.Logf("CAPUBKEY: %v", hex.EncodeToString(cert.SubjectKeyId))
+			// t.Logf("CAAuthKey: %v", hex.EncodeToString(cert.AuthorityKeyId))
+
+			childKey, err := rsa.GenerateKey(rand.Reader, 2048)
+			require.NoError(t, err)
 
 			childReq := testutils.CertificateTemplate(cert, opts...)
-			childBytes, err := x509.CreateCertificate(rand.Reader, childReq, certReq, key.Public(), key)
+			childBytes, err := x509.CreateCertificate(rand.Reader, childReq, cert, childKey.Public(), key)
 			require.NoError(t, err)
 
 			childCert, err := x509.ParseCertificate(childBytes)
@@ -124,8 +125,10 @@ func TestCertSigning(t *testing.T) {
 				require.Equal(t, table.sigAlg, childCert.SignatureAlgorithm)
 			}
 
-			t.Logf("PUBKEY: %v", hex.EncodeToString(childCert.SubjectKeyId))
-			t.Logf("AuthKey: %v", hex.EncodeToString(childCert.AuthorityKeyId))
+			require.Equal(t, cert.SubjectKeyId, childCert.AuthorityKeyId)
+
+			// t.Logf("PUBKEY: %v", hex.EncodeToString(childCert.SubjectKeyId))
+			// t.Logf("AuthKey: %v", hex.EncodeToString(childCert.AuthorityKeyId))
 
 			require.NoError(t, childCert.CheckSignatureFrom(cert))
 
