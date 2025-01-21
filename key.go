@@ -13,7 +13,7 @@ import (
 	kmsTypes "github.com/aws/aws-sdk-go-v2/service/kms/types"
 )
 
-type SignerKey struct {
+type Key struct {
 	keyArn string
 	client awsClienter
 	ctx    context.Context
@@ -23,6 +23,10 @@ type SignerKey struct {
 	signingAlg  kmsTypes.SigningAlgorithmSpec
 	signingAlgs []kmsTypes.SigningAlgorithmSpec
 	keySpec     kmsTypes.KeySpec
+	keyUsage    kmsTypes.KeyUsageType
+
+	encryptionAlg  kmsTypes.EncryptionAlgorithmSpec
+	encryptionAlgs []kmsTypes.EncryptionAlgorithmSpec
 
 	keyIdBytes []byte
 
@@ -30,11 +34,12 @@ type SignerKey struct {
 }
 
 var (
-	_ crypto.Signer  = (*SignerKey)(nil)
-	_ realPrivateKey = (*SignerKey)(nil)
+	_ crypto.Signer    = (*Key)(nil)
+	_ crypto.Decrypter = (*Key)(nil)
+	_ realPrivateKey   = (*Key)(nil)
 )
 
-func NewSignerKey(ctx context.Context, keyArn string, opts ...OptionFunc) (*SignerKey, error) {
+func NewKey(ctx context.Context, keyArn string, opts ...optionFunc) (*Key, error) {
 
 	options := kcsOption{}
 
@@ -48,7 +53,7 @@ func NewSignerKey(ctx context.Context, keyArn string, opts ...OptionFunc) (*Sign
 		return nil, ErrNoAwsClientError
 	}
 
-	key := &SignerKey{
+	key := &Key{
 		ctx:        ctx,
 		client:     options.awsClient,
 		signingAlg: options.signingAlg,
@@ -60,16 +65,16 @@ func NewSignerKey(ctx context.Context, keyArn string, opts ...OptionFunc) (*Sign
 	return key, nil
 }
 
-func (k *SignerKey) SigningAlgorithms() []kmsTypes.SigningAlgorithmSpec {
+func (k *Key) SigningAlgorithms() []kmsTypes.SigningAlgorithmSpec {
 	return k.signingAlgs
 }
 
-func (k *SignerKey) KeySpec() kmsTypes.KeySpec {
+func (k *Key) KeySpec() kmsTypes.KeySpec {
 	return k.keySpec
 }
 
-func (k *SignerKey) Equal(x crypto.PrivateKey) bool {
-	xx, ok := x.(*SignerKey)
+func (k *Key) Equal(x crypto.PrivateKey) bool {
+	xx, ok := x.(*Key)
 	if !ok {
 		return false
 	}
@@ -77,7 +82,7 @@ func (k *SignerKey) Equal(x crypto.PrivateKey) bool {
 	return k.keyArn == xx.keyArn
 }
 
-func (k *SignerKey) preload(keyArn string) error {
+func (k *Key) preload(keyArn string) error {
 	resp, err := k.client.GetPublicKey(k.ctx, &kms.GetPublicKeyInput{
 		KeyId:       &keyArn,
 		GrantTokens: k.grantTokens,
@@ -86,13 +91,9 @@ func (k *SignerKey) preload(keyArn string) error {
 		return err
 	}
 
-	if resp.KeyUsage != kmsTypes.KeyUsageTypeSignVerify {
-		return ErrKeyNotSignVerifyError
-	}
-
 	k.keyArn = *resp.KeyId
-	k.signingAlgs = resp.SigningAlgorithms
 	k.keySpec = resp.KeySpec
+	k.keyUsage = resp.KeyUsage
 
 	pub, err := x509.ParsePKIXPublicKey(resp.PublicKey)
 	if err != nil {
@@ -100,27 +101,45 @@ func (k *SignerKey) preload(keyArn string) error {
 	}
 	k.pubKey = pub
 
-	if k.signingAlg == "" && len(k.signingAlgs) == 1 {
-		// k.signingAlg = getBestSigningAlgorithm(k.signingAlgs)
-		k.signingAlg = k.signingAlgs[0]
+	switch k.keyUsage {
+	case kmsTypes.KeyUsageTypeEncryptDecrypt:
+		k.encryptionAlgs = resp.EncryptionAlgorithms
+
+	case kmsTypes.KeyUsageTypeSignVerify:
+		k.signingAlgs = resp.SigningAlgorithms
+		if k.signingAlg == "" && len(k.signingAlgs) == 1 {
+			k.signingAlg = k.signingAlgs[0]
+		}
 	}
 
 	return nil
 }
 
-func (k *SignerKey) KMSKeyId() string {
+func (k *Key) KMSKeyId() string {
 	return k.keyArn
 }
 
-func (k *SignerKey) PublicKeyId() []byte {
+func (k *Key) PublicKeyId() []byte {
 	return nil
 }
 
-func (k *SignerKey) Public() crypto.PublicKey {
+func (k *Key) Public() crypto.PublicKey {
 	return k.pubKey
 }
 
-func (k *SignerKey) Sign(_ io.Reader, digest []byte, opts crypto.SignerOpts) ([]byte, error) {
+func (k *Key) Decrypt(_ io.Reader, msg []byte, opts crypto.DecrypterOpts) (plaintext []byte, err error) {
+	if k.keyUsage != kmsTypes.KeyUsageTypeEncryptDecrypt {
+		return nil, ErrKeyNotEncryptDecryptError
+	}
+
+	return nil, nil
+}
+
+func (k *Key) Sign(_ io.Reader, digest []byte, opts crypto.SignerOpts) ([]byte, error) {
+
+	if k.keyUsage != kmsTypes.KeyUsageTypeSignVerify {
+		return nil, ErrKeyNotSignVerifyError
+	}
 
 	alg := k.signingAlg
 
@@ -148,7 +167,7 @@ func (k *SignerKey) Sign(_ io.Reader, digest []byte, opts crypto.SignerOpts) ([]
 	return resp.Signature, nil
 }
 
-func (k *SignerKey) determineSigningAlgorithm(opts crypto.SignerOpts) kmsTypes.SigningAlgorithmSpec {
+func (k *Key) determineSigningAlgorithm(opts crypto.SignerOpts) kmsTypes.SigningAlgorithmSpec {
 	// RSA with PSS
 	if pssOpts, ok := opts.(*rsa.PSSOptions); ok {
 		switch pssOpts.Hash {

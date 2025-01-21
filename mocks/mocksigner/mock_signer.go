@@ -28,6 +28,45 @@ func (m *MockSignerClient) Public() crypto.PublicKey {
 	return m.privKey.Public()
 }
 
+func (m *MockSignerClient) Decrypt(ctx context.Context, input *kms.DecryptInput, _ ...func(*kms.Options)) (*kms.DecryptOutput, error) {
+
+	rsaKey, ok := m.privKey.(*rsa.PrivateKey)
+	if !ok {
+		return nil, &kmsTypes.InvalidKeyUsageException{}
+	}
+
+	var (
+		res []byte
+		err error
+	)
+
+	switch input.EncryptionAlgorithm {
+	case kmsTypes.EncryptionAlgorithmSpecRsaesOaepSha1:
+		res, err = rsaKey.Decrypt(rand.Reader, input.CiphertextBlob, &rsa.OAEPOptions{
+			Hash: crypto.SHA1,
+		})
+
+	case kmsTypes.EncryptionAlgorithmSpecRsaesOaepSha256:
+		res, err = rsaKey.Decrypt(rand.Reader, input.CiphertextBlob, &rsa.OAEPOptions{
+			Hash: crypto.SHA256,
+		})
+
+	default:
+		return nil, &kmsTypes.InvalidKeyUsageException{}
+	}
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &kms.DecryptOutput{
+		EncryptionAlgorithm: input.EncryptionAlgorithm,
+		KeyId:               aws.String(defaultKeyArn),
+		Plaintext:           res,
+	}, nil
+
+}
+
 func (m *MockSignerClient) GetPublicKey(ctx context.Context, input *kms.GetPublicKeyInput, opts ...func(*kms.Options)) (*kms.GetPublicKeyOutput, error) {
 
 	pub := m.privKey.Public()
@@ -148,9 +187,9 @@ func (m *MockSignerClient) Sign(ctx context.Context, input *kms.SignInput, opts 
 	return out, nil
 }
 
-type OptionFunc = func(*MockSignerClient)
+type optionFunc = func(*MockSignerClient)
 
-func NewMockSignerClient(t *testing.T, key crypto.Signer, optFns ...OptionFunc) *MockSignerClient {
+func NewMockSignerClient(t *testing.T, key crypto.Signer, optFns ...optionFunc) *MockSignerClient {
 	m := &MockSignerClient{
 		t:        t,
 		privKey:  key,
@@ -164,7 +203,7 @@ func NewMockSignerClient(t *testing.T, key crypto.Signer, optFns ...OptionFunc) 
 	return m
 }
 
-func WithKeyUsage(v kmsTypes.KeyUsageType) OptionFunc {
+func WithKeyUsage(v kmsTypes.KeyUsageType) optionFunc {
 	return func(m *MockSignerClient) {
 		m.keyUsage = v
 	}
