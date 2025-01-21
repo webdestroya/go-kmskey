@@ -2,18 +2,12 @@ package kmskey
 
 import (
 	"context"
-	"errors"
 	"io"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/kms"
 	"golang.org/x/sync/errgroup"
 )
-
-type Rand interface {
-	io.Reader
-	GetCustomKeyStoreId() *string
-}
 
 const (
 	maxRandomBytes        = 1024
@@ -30,7 +24,6 @@ type kmsRand struct {
 
 var (
 	_ io.Reader = (*kmsRand)(nil)
-	_ Rand      = (*kmsRand)(nil)
 )
 
 func (k *kmsRand) Read(b []byte) (int, error) {
@@ -40,10 +33,6 @@ func (k *kmsRand) Read(b []byte) (int, error) {
 	if numBytes == 0 {
 		return 0, nil
 	}
-
-	// if k.client == nil {
-	// 	return 0, errors.New("aws client not provided")
-	// }
 
 	// they want less than the limit
 	if numBytes <= maxRandomBytes {
@@ -104,7 +93,7 @@ func (k *kmsRand) GetCustomKeyStoreId() *string {
 	return k.customKeyStoreId
 }
 
-func NewRandom(ctx context.Context, optFns ...OptionFunc) (Rand, error) {
+func NewRandom(ctx context.Context, optFns ...OptionFunc) (io.Reader, error) {
 	opts := kcsOption{
 		maxConcurrency: defaultMaxConcurrency,
 	}
@@ -123,7 +112,7 @@ func NewRandom(ctx context.Context, optFns ...OptionFunc) (Rand, error) {
 	}
 
 	if r.client == nil {
-		return nil, errors.New("aws client not provided")
+		return nil, ErrNoAwsClientError
 	}
 
 	return r, nil

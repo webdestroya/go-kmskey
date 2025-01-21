@@ -2,11 +2,8 @@ package kmskey_test
 
 import (
 	"context"
-	"crypto"
-	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
-	"crypto/rsa"
 	"crypto/x509"
 	"encoding/hex"
 	"testing"
@@ -14,7 +11,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/webdestroya/go-kmskey"
 	"github.com/webdestroya/go-kmskey/internal/testutils"
-	"github.com/webdestroya/go-kmskey/internal/utils"
 	"github.com/webdestroya/go-kmskey/mocks/mockkms"
 )
 
@@ -23,73 +19,73 @@ func TestCertSigning(t *testing.T) {
 	t.Parallel()
 
 	tables := []struct {
-		label   string
-		privKey crypto.Signer
-		sigAlg  x509.SignatureAlgorithm
+		label  string
+		keyOpt mockkms.OptionFunc
+		sigAlg x509.SignatureAlgorithm
 	}{
 		{
-			label:   "ecc256",
-			privKey: utils.Must(ecdsa.GenerateKey(elliptic.P256(), rand.Reader)),
+			label:  "ecc256",
+			keyOpt: mockkms.WithECCKey(elliptic.P256()),
 		},
 		{
-			label:   "ecc384",
-			privKey: utils.Must(ecdsa.GenerateKey(elliptic.P384(), rand.Reader)),
+			label:  "ecc384",
+			keyOpt: mockkms.WithECCKey(elliptic.P384()),
 		},
 		{
-			label:   "ecc521",
-			privKey: utils.Must(ecdsa.GenerateKey(elliptic.P521(), rand.Reader)),
-		},
-
-		{
-			label:   "rsa2048",
-			privKey: utils.Must(rsa.GenerateKey(rand.Reader, 2048)),
-		},
-		{
-			label:   "rsa3072",
-			privKey: utils.Must(rsa.GenerateKey(rand.Reader, 3072)),
-		},
-		{
-			label:   "rsa4096",
-			privKey: utils.Must(rsa.GenerateKey(rand.Reader, 4096)),
+			label:  "ecc521",
+			keyOpt: mockkms.WithECCKey(elliptic.P521()),
 		},
 
 		{
-			label:   "rsa2048pss256",
-			privKey: utils.Must(rsa.GenerateKey(rand.Reader, 2048)),
-			sigAlg:  x509.SHA256WithRSAPSS,
+			label:  "rsa2048",
+			keyOpt: mockkms.WithRSAKey(2048),
 		},
 		{
-			label:   "rsa2048pss384",
-			privKey: utils.Must(rsa.GenerateKey(rand.Reader, 2048)),
-			sigAlg:  x509.SHA384WithRSAPSS,
+			label:  "rsa3072",
+			keyOpt: mockkms.WithRSAKey(3072),
 		},
 		{
-			label:   "rsa2048pss512",
-			privKey: utils.Must(rsa.GenerateKey(rand.Reader, 2048)),
-			sigAlg:  x509.SHA512WithRSAPSS,
+			label:  "rsa4096",
+			keyOpt: mockkms.WithRSAKey(4096),
 		},
 
 		{
-			label:   "rsa2048sha256",
-			privKey: utils.Must(rsa.GenerateKey(rand.Reader, 2048)),
-			sigAlg:  x509.SHA256WithRSA,
+			label:  "rsa2048pss256",
+			keyOpt: mockkms.WithRSAKey(2048),
+			sigAlg: x509.SHA256WithRSAPSS,
 		},
 		{
-			label:   "rsa2048sha384",
-			privKey: utils.Must(rsa.GenerateKey(rand.Reader, 2048)),
-			sigAlg:  x509.SHA384WithRSA,
+			label:  "rsa2048pss384",
+			keyOpt: mockkms.WithRSAKey(2048),
+			sigAlg: x509.SHA384WithRSAPSS,
 		},
 		{
-			label:   "rsa2048sha512",
-			privKey: utils.Must(rsa.GenerateKey(rand.Reader, 2048)),
-			sigAlg:  x509.SHA512WithRSA,
+			label:  "rsa2048pss512",
+			keyOpt: mockkms.WithRSAKey(2048),
+			sigAlg: x509.SHA512WithRSAPSS,
+		},
+
+		{
+			label:  "rsa2048sha256",
+			keyOpt: mockkms.WithRSAKey(2048),
+			sigAlg: x509.SHA256WithRSA,
+		},
+		{
+			label:  "rsa2048sha384",
+			keyOpt: mockkms.WithRSAKey(2048),
+			sigAlg: x509.SHA384WithRSA,
+		},
+		{
+			label:  "rsa2048sha512",
+			keyOpt: mockkms.WithRSAKey(2048),
+			sigAlg: x509.SHA512WithRSA,
 		},
 	}
 
 	for _, table := range tables {
 		t.Run(table.label, func(t *testing.T) {
 
-			client := mockkms.NewMockSignerClient(t, table.privKey)
+			client := mockkms.NewMockSignerClient(t, table.keyOpt)
 
 			key, err := kmskey.NewKey(context.Background(), "alias/blah", kmskey.WithAwsClient(client))
 			require.NoError(t, err)

@@ -16,7 +16,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/kms"
 	kmsTypes "github.com/aws/aws-sdk-go-v2/service/kms/types"
-	"github.com/stretchr/testify/require"
 )
 
 const (
@@ -24,22 +23,22 @@ const (
 	randData      = `_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789`
 )
 
-type MockSignerClient struct {
+type MockKMSClient struct {
 	t        *testing.T
 	reqNum   atomic.Uint32
 	privKey  crypto.Signer
 	keyUsage kmsTypes.KeyUsageType
 }
 
-func (m *MockSignerClient) PrivateKey() crypto.Signer {
+func (m *MockKMSClient) PrivateKey() crypto.Signer {
 	return m.privKey
 }
 
-func (m *MockSignerClient) Public() crypto.PublicKey {
+func (m *MockKMSClient) Public() crypto.PublicKey {
 	return m.privKey.Public()
 }
 
-func (m *MockSignerClient) GenerateRandom(ctx context.Context, input *kms.GenerateRandomInput, _ ...func(*kms.Options)) (*kms.GenerateRandomOutput, error) {
+func (m *MockKMSClient) GenerateRandom(ctx context.Context, input *kms.GenerateRandomInput, _ ...func(*kms.Options)) (*kms.GenerateRandomOutput, error) {
 	bufLen := int(*input.NumberOfBytes)
 	pos := m.reqNum.Add(uint32(1))
 
@@ -48,7 +47,7 @@ func (m *MockSignerClient) GenerateRandom(ctx context.Context, input *kms.Genera
 	}, nil
 }
 
-func (m *MockSignerClient) Decrypt(ctx context.Context, input *kms.DecryptInput, _ ...func(*kms.Options)) (*kms.DecryptOutput, error) {
+func (m *MockKMSClient) Decrypt(ctx context.Context, input *kms.DecryptInput, _ ...func(*kms.Options)) (*kms.DecryptOutput, error) {
 
 	rsaKey, ok := m.privKey.(*rsa.PrivateKey)
 	if !ok {
@@ -87,7 +86,7 @@ func (m *MockSignerClient) Decrypt(ctx context.Context, input *kms.DecryptInput,
 
 }
 
-func (m *MockSignerClient) GetPublicKey(ctx context.Context, input *kms.GetPublicKeyInput, opts ...func(*kms.Options)) (*kms.GetPublicKeyOutput, error) {
+func (m *MockKMSClient) GetPublicKey(ctx context.Context, input *kms.GetPublicKeyInput, opts ...func(*kms.Options)) (*kms.GetPublicKeyOutput, error) {
 
 	pub := m.privKey.Public()
 
@@ -161,7 +160,7 @@ func (m *MockSignerClient) GetPublicKey(ctx context.Context, input *kms.GetPubli
 	return out, nil
 }
 
-func (m *MockSignerClient) Sign(ctx context.Context, input *kms.SignInput, opts ...func(*kms.Options)) (*kms.SignOutput, error) {
+func (m *MockKMSClient) Sign(ctx context.Context, input *kms.SignInput, opts ...func(*kms.Options)) (*kms.SignOutput, error) {
 
 	out := &kms.SignOutput{
 		KeyId:            aws.String(defaultKeyArn),
@@ -222,12 +221,13 @@ func (m *MockSignerClient) Sign(ctx context.Context, input *kms.SignInput, opts 
 	return out, nil
 }
 
-type optionFunc = func(*MockSignerClient)
+type OptionFunc = func(*MockKMSClient)
 
-func NewMockSignerClient(t *testing.T, key crypto.Signer, optFns ...optionFunc) *MockSignerClient {
-	m := &MockSignerClient{
+func newMock(t *testing.T, optFns ...OptionFunc) *MockKMSClient {
+	t.Helper()
+
+	m := &MockKMSClient{
 		t:        t,
-		privKey:  key,
 		reqNum:   atomic.Uint32{},
 		keyUsage: kmsTypes.KeyUsageTypeSignVerify,
 	}
@@ -239,46 +239,64 @@ func NewMockSignerClient(t *testing.T, key crypto.Signer, optFns ...optionFunc) 
 	return m
 }
 
-func WithKeyUsage(v kmsTypes.KeyUsageType) optionFunc {
-	return func(m *MockSignerClient) {
+func NewMockSignerClient(t *testing.T, opts ...OptionFunc) *MockKMSClient {
+	t.Helper()
+	if opts == nil {
+		opts = make([]OptionFunc, 0)
+	}
+
+	opts = append(opts, WithKeyUsage(kmsTypes.KeyUsageTypeSignVerify))
+
+	m := newMock(t, opts...)
+
+	if m.privKey == nil {
+		t.Fatal("missing private key")
+	}
+
+	return m
+}
+
+func WithKey(key crypto.Signer) OptionFunc {
+	return func(m *MockKMSClient) {
+		m.privKey = key
+	}
+}
+
+func WithKeyUsage(v kmsTypes.KeyUsageType) OptionFunc {
+	return func(m *MockKMSClient) {
 		m.keyUsage = v
 	}
 }
 
-func WithRSAKey(bits int) optionFunc {
+func WithRSAKey(bits int) OptionFunc {
 	key, err := rsa.GenerateKey(rand.Reader, bits)
 	if err != nil {
 		panic(err)
 	}
-	return func(m *MockSignerClient) {
-		m.privKey = key
-	}
+	return WithKey(key)
 }
 
-func WithECCKey(curve elliptic.Curve) optionFunc {
+func WithECCKey(curve elliptic.Curve) OptionFunc {
 	key, err := ecdsa.GenerateKey(curve, rand.Reader)
 	if err != nil {
 		panic(err)
 	}
-	return func(m *MockSignerClient) {
-		m.privKey = key
-	}
+	return WithKey(key)
 }
 
-func NewMockEncryptDecrypt(t *testing.T, bitSize int, opts ...optionFunc) *MockSignerClient {
+func NewMockEncryptDecrypt(t *testing.T, bitSize int, opts ...OptionFunc) *MockKMSClient {
 	t.Helper()
-	key, err := rsa.GenerateKey(rand.Reader, bitSize)
-	require.NoError(t, err)
-
 	if opts == nil {
-		opts = make([]optionFunc, 0)
+		opts = make([]OptionFunc, 0)
 	}
 
+	opts = append(opts, WithRSAKey(bitSize))
 	opts = append(opts, WithKeyUsage(kmsTypes.KeyUsageTypeEncryptDecrypt))
 
-	return NewMockSignerClient(t, key, opts...)
+	return newMock(t, opts...)
 }
 
-func NewMockRandom(t *testing.T) *MockSignerClient {
-	return NewMockSignerClient(t, nil)
+func NewMockRandom(t *testing.T) *MockKMSClient {
+	t.Helper()
+	return newMock(t)
 }

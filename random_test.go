@@ -85,7 +85,7 @@ func TestRead(t *testing.T) {
 	t.Run("invalid setup", func(t *testing.T) {
 		res, err := kmskey.NewRandom(context.Background())
 		require.Error(t, err)
-		require.ErrorContains(t, err, "aws client not provided")
+		require.ErrorIs(t, err, kmskey.ErrNoAwsClientError)
 		require.Nil(t, res)
 	})
 

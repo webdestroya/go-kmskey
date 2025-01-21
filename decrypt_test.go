@@ -8,16 +8,14 @@ import (
 	"crypto/sha256"
 	"testing"
 
-	kmsTypes "github.com/aws/aws-sdk-go-v2/service/kms/types"
 	"github.com/stretchr/testify/require"
 	"github.com/webdestroya/go-kmskey"
-	"github.com/webdestroya/go-kmskey/internal/utils"
 	"github.com/webdestroya/go-kmskey/mocks/mockkms"
 )
 
 func TestDecrypt(t *testing.T) {
-	rsaKey := utils.Must(rsa.GenerateKey(rand.Reader, 2048))
-	client := mockkms.NewMockSignerClient(t, rsaKey, mockkms.WithKeyUsage(kmsTypes.KeyUsageTypeEncryptDecrypt))
+	client := mockkms.NewMockEncryptDecrypt(t, 2048)
+	rsaKey := client.PrivateKey().(*rsa.PrivateKey)
 
 	maxLen := rsaKey.PublicKey.Size() - 64 - 2
 	t.Log(maxLen)
