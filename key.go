@@ -112,13 +112,15 @@ func (k *Key) preload(keyArn string) error {
 	return nil
 }
 
-func (k *Key) KMSKeyId() string {
+// The resolved ARN of the key being used
+func (k *Key) KeyARN() string {
 	return k.keyArn
 }
 
-// func (k *Key) PublicKeyId() []byte {
-// 	return nil
-// }
+// The value is a DER-encoded X.509 public key, also known as SubjectPublicKeyInfo (SPKI), as defined in RFC 5280
+func (k *Key) SubjectPublicKeyInfo() []byte {
+	return k.pubKeyBytes
+}
 
 func (k *Key) Public() crypto.PublicKey {
 	return k.pubKey

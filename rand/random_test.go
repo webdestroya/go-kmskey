@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
-	"github.com/webdestroya/kmskey/rand"
+	"github.com/webdestroya/go-kmskey/rand"
 )
 
 // func FuzzRead(f *testing.F) {

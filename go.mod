@@ -1,4 +1,4 @@
-module github.com/webdestroya/kmskey
+module github.com/webdestroya/go-kmskey
 
 go 1.23.1
 

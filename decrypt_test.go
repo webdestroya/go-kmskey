@@ -10,9 +10,9 @@ import (
 
 	kmsTypes "github.com/aws/aws-sdk-go-v2/service/kms/types"
 	"github.com/stretchr/testify/require"
-	"github.com/webdestroya/kmskey"
-	"github.com/webdestroya/kmskey/internal/utils"
-	"github.com/webdestroya/kmskey/mocks/mocksigner"
+	"github.com/webdestroya/go-kmskey"
+	"github.com/webdestroya/go-kmskey/internal/utils"
+	"github.com/webdestroya/go-kmskey/mocks/mocksigner"
 )
 
 func TestDecrypt(t *testing.T) {

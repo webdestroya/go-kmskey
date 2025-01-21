@@ -12,10 +12,10 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
-	"github.com/webdestroya/kmskey"
-	"github.com/webdestroya/kmskey/internal/testutils"
-	"github.com/webdestroya/kmskey/internal/utils"
-	"github.com/webdestroya/kmskey/mocks/mocksigner"
+	"github.com/webdestroya/go-kmskey"
+	"github.com/webdestroya/go-kmskey/internal/testutils"
+	"github.com/webdestroya/go-kmskey/internal/utils"
+	"github.com/webdestroya/go-kmskey/mocks/mocksigner"
 )
 
 func TestCertSigning(t *testing.T) {
