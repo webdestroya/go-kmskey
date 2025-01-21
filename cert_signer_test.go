@@ -91,7 +91,7 @@ func TestCertSigning(t *testing.T) {
 
 			client := mocksigner.NewMockSignerClient(t, table.privKey)
 
-			key, err := kmscertsigner.New(context.Background(), "alias/blah", kmscertsigner.WithAwsClient(client))
+			key, err := kmscertsigner.NewSignerKey(context.Background(), "alias/blah", kmscertsigner.WithAwsClient(client))
 			require.NoError(t, err)
 
 			opts := make([]func(*x509.Certificate), 0)

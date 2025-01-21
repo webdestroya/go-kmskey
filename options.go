@@ -14,35 +14,35 @@ type kcsOption struct {
 	grantTokens []string
 }
 
-type CertSignerOpt func(*kcsOption) error
+type OptionFunc func(*kcsOption) error
 
 type awsClienter interface {
 	GetPublicKey(context.Context, *kms.GetPublicKeyInput, ...func(*kms.Options)) (*kms.GetPublicKeyOutput, error)
 	Sign(context.Context, *kms.SignInput, ...func(*kms.Options)) (*kms.SignOutput, error)
 }
 
-func WithAwsClient(client awsClienter) CertSignerOpt {
+func WithAwsClient(client awsClienter) OptionFunc {
 	return func(kcs *kcsOption) error {
 		kcs.awsClient = client
 		return nil
 	}
 }
 
-func WithAwsConfig(cfg aws.Config, fns ...func(*kms.Options)) CertSignerOpt {
+func WithAwsConfig(cfg aws.Config, fns ...func(*kms.Options)) OptionFunc {
 	return func(kcs *kcsOption) error {
 		kcs.awsClient = kms.NewFromConfig(cfg, fns...)
 		return nil
 	}
 }
 
-func WithSigningAlgorithm(alg kmsTypes.SigningAlgorithmSpec) CertSignerOpt {
+func WithSigningAlgorithm(alg kmsTypes.SigningAlgorithmSpec) OptionFunc {
 	return func(ko *kcsOption) error {
 		ko.signingAlg = alg
 		return nil
 	}
 }
 
-func WithGrantTokens(tokens []string) CertSignerOpt {
+func WithGrantTokens(tokens []string) OptionFunc {
 	return func(ko *kcsOption) error {
 		ko.grantTokens = tokens
 		return nil
