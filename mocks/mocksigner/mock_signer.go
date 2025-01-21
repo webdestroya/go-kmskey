@@ -14,6 +14,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/kms"
 	kmsTypes "github.com/aws/aws-sdk-go-v2/service/kms/types"
+	"github.com/stretchr/testify/require"
 )
 
 const defaultKeyArn = `arn:aws:kms:us-east-1:123456789012:key/00000000-0000-0000-0000-deadbeefdead`
@@ -22,6 +23,10 @@ type MockSignerClient struct {
 	t        *testing.T
 	privKey  crypto.Signer
 	keyUsage kmsTypes.KeyUsageType
+}
+
+func (m *MockSignerClient) PrivateKey() crypto.Signer {
+	return m.privKey
 }
 
 func (m *MockSignerClient) Public() crypto.PublicKey {
@@ -77,49 +82,64 @@ func (m *MockSignerClient) GetPublicKey(ctx context.Context, input *kms.GetPubli
 	}
 
 	out := &kms.GetPublicKeyOutput{
-		KeyId:             aws.String(defaultKeyArn),
-		KeySpec:           "",
-		KeyUsage:          m.keyUsage,
-		PublicKey:         pubBytes,
-		SigningAlgorithms: []kmsTypes.SigningAlgorithmSpec{},
+		KeyId:     aws.String(defaultKeyArn),
+		KeySpec:   "",
+		KeyUsage:  m.keyUsage,
+		PublicKey: pubBytes,
 	}
 
-	switch v := m.privKey.(type) {
-	case *rsa.PrivateKey:
-		out.KeySpec = kmsTypes.KeySpec(fmt.Sprintf("RSA_%d", v.Size()*8))
-		out.SigningAlgorithms = []kmsTypes.SigningAlgorithmSpec{
-			kmsTypes.SigningAlgorithmSpecRsassaPssSha256,
-			kmsTypes.SigningAlgorithmSpecRsassaPssSha384,
-			kmsTypes.SigningAlgorithmSpecRsassaPssSha512,
-			kmsTypes.SigningAlgorithmSpecRsassaPkcs1V15Sha256,
-			kmsTypes.SigningAlgorithmSpecRsassaPkcs1V15Sha384,
-			kmsTypes.SigningAlgorithmSpecRsassaPkcs1V15Sha512,
-		}
-
-	case *ecdsa.PrivateKey:
-		switch v.Curve {
-		case elliptic.P256():
-			out.KeySpec = kmsTypes.KeySpecEccNistP256
-			out.SigningAlgorithms = []kmsTypes.SigningAlgorithmSpec{
-				kmsTypes.SigningAlgorithmSpecEcdsaSha256,
+	if m.keyUsage == kmsTypes.KeyUsageTypeEncryptDecrypt {
+		switch v := m.privKey.(type) {
+		case *rsa.PrivateKey:
+			out.KeySpec = kmsTypes.KeySpec(fmt.Sprintf("RSA_%d", v.Size()*8))
+			out.EncryptionAlgorithms = []kmsTypes.EncryptionAlgorithmSpec{
+				kmsTypes.EncryptionAlgorithmSpecRsaesOaepSha1,
+				kmsTypes.EncryptionAlgorithmSpecRsaesOaepSha256,
 			}
-
-		case elliptic.P384():
-			out.KeySpec = kmsTypes.KeySpecEccNistP384
-			out.SigningAlgorithms = []kmsTypes.SigningAlgorithmSpec{
-				kmsTypes.SigningAlgorithmSpecEcdsaSha384,
-			}
-
-		case elliptic.P521():
-			out.KeySpec = kmsTypes.KeySpecEccNistP521
-			out.SigningAlgorithms = []kmsTypes.SigningAlgorithmSpec{
-				kmsTypes.SigningAlgorithmSpecEcdsaSha512,
+		default:
+			return nil, &kmsTypes.KMSInternalException{
+				Message: aws.String("EncryptDecrypt is only for RSA keys"),
 			}
 		}
+	} else {
 
-	default:
-		return nil, &kmsTypes.KMSInternalException{
-			Message: aws.String(fmt.Sprintf("BAD KEY TYPE: %T", v)),
+		switch v := m.privKey.(type) {
+		case *rsa.PrivateKey:
+			out.KeySpec = kmsTypes.KeySpec(fmt.Sprintf("RSA_%d", v.Size()*8))
+			out.SigningAlgorithms = []kmsTypes.SigningAlgorithmSpec{
+				kmsTypes.SigningAlgorithmSpecRsassaPssSha256,
+				kmsTypes.SigningAlgorithmSpecRsassaPssSha384,
+				kmsTypes.SigningAlgorithmSpecRsassaPssSha512,
+				kmsTypes.SigningAlgorithmSpecRsassaPkcs1V15Sha256,
+				kmsTypes.SigningAlgorithmSpecRsassaPkcs1V15Sha384,
+				kmsTypes.SigningAlgorithmSpecRsassaPkcs1V15Sha512,
+			}
+
+		case *ecdsa.PrivateKey:
+			switch v.Curve {
+			case elliptic.P256():
+				out.KeySpec = kmsTypes.KeySpecEccNistP256
+				out.SigningAlgorithms = []kmsTypes.SigningAlgorithmSpec{
+					kmsTypes.SigningAlgorithmSpecEcdsaSha256,
+				}
+
+			case elliptic.P384():
+				out.KeySpec = kmsTypes.KeySpecEccNistP384
+				out.SigningAlgorithms = []kmsTypes.SigningAlgorithmSpec{
+					kmsTypes.SigningAlgorithmSpecEcdsaSha384,
+				}
+
+			case elliptic.P521():
+				out.KeySpec = kmsTypes.KeySpecEccNistP521
+				out.SigningAlgorithms = []kmsTypes.SigningAlgorithmSpec{
+					kmsTypes.SigningAlgorithmSpecEcdsaSha512,
+				}
+			}
+
+		default:
+			return nil, &kmsTypes.KMSInternalException{
+				Message: aws.String(fmt.Sprintf("BAD KEY TYPE: %T", v)),
+			}
 		}
 	}
 
@@ -207,4 +227,38 @@ func WithKeyUsage(v kmsTypes.KeyUsageType) optionFunc {
 	return func(m *MockSignerClient) {
 		m.keyUsage = v
 	}
+}
+
+func WithRSAKey(bits int) optionFunc {
+	key, err := rsa.GenerateKey(rand.Reader, bits)
+	if err != nil {
+		panic(err)
+	}
+	return func(m *MockSignerClient) {
+		m.privKey = key
+	}
+}
+
+func WithECCKey(curve elliptic.Curve) optionFunc {
+	key, err := ecdsa.GenerateKey(curve, rand.Reader)
+	if err != nil {
+		panic(err)
+	}
+	return func(m *MockSignerClient) {
+		m.privKey = key
+	}
+}
+
+func NewMockEncryptDecrypt(t *testing.T, bitSize int, opts ...optionFunc) *MockSignerClient {
+	t.Helper()
+	key, err := rsa.GenerateKey(rand.Reader, bitSize)
+	require.NoError(t, err)
+
+	if opts == nil {
+		opts = make([]optionFunc, 0)
+	}
+
+	opts = append(opts, WithKeyUsage(kmsTypes.KeyUsageTypeEncryptDecrypt))
+
+	return NewMockSignerClient(t, key, opts...)
 }

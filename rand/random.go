@@ -95,7 +95,7 @@ func (k *kmsRand) Read(b []byte) (int, error) {
 func (k *kmsRand) read(ctx context.Context, numBytes int) ([]byte, error) {
 	resp, err := k.client.GenerateRandom(ctx, &kms.GenerateRandomInput{
 		CustomKeyStoreId: k.customKeyStoreId,
-		NumberOfBytes:    aws.Int32(int32(numBytes)),
+		NumberOfBytes:    aws.Int32(int32(numBytes)), //nolint:gosec // an overflow would just cause an AWS error, it's fine
 	})
 	if err != nil {
 		return nil, err

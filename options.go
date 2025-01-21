@@ -1,4 +1,4 @@
-package kmscertsigner
+package kmskey
 
 import (
 	"github.com/aws/aws-sdk-go-v2/aws"

@@ -1,4 +1,4 @@
-package kmscertsigner
+package kmskey
 
 import (
 	"context"

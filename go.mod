@@ -1,4 +1,4 @@
-module github.com/webdestroya/kmscertsigner
+module github.com/webdestroya/kmskey
 
 go 1.23.1
 

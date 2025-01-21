@@ -1,4 +1,4 @@
-package kmscertsigner
+package kmskey
 
 import (
 	"context"
@@ -25,18 +25,18 @@ type Key struct {
 	keySpec     kmsTypes.KeySpec
 	keyUsage    kmsTypes.KeyUsageType
 
-	encryptionAlg  kmsTypes.EncryptionAlgorithmSpec
 	encryptionAlgs []kmsTypes.EncryptionAlgorithmSpec
 
-	keyIdBytes []byte
+	pubKeyBytes []byte
 
 	pubKey crypto.PublicKey
 }
 
 var (
-	_ crypto.Signer    = (*Key)(nil)
-	_ crypto.Decrypter = (*Key)(nil)
-	_ realPrivateKey   = (*Key)(nil)
+	_ crypto.Signer     = (*Key)(nil)
+	_ crypto.Decrypter  = (*Key)(nil)
+	_ crypto.PrivateKey = (*Key)(nil)
+	_ realPrivateKey    = (*Key)(nil)
 )
 
 func NewKey(ctx context.Context, keyArn string, opts ...optionFunc) (*Key, error) {
@@ -65,10 +65,6 @@ func NewKey(ctx context.Context, keyArn string, opts ...optionFunc) (*Key, error
 	return key, nil
 }
 
-func (k *Key) SigningAlgorithms() []kmsTypes.SigningAlgorithmSpec {
-	return k.signingAlgs
-}
-
 func (k *Key) KeySpec() kmsTypes.KeySpec {
 	return k.keySpec
 }
@@ -94,6 +90,7 @@ func (k *Key) preload(keyArn string) error {
 	k.keyArn = *resp.KeyId
 	k.keySpec = resp.KeySpec
 	k.keyUsage = resp.KeyUsage
+	k.pubKeyBytes = resp.PublicKey
 
 	pub, err := x509.ParsePKIXPublicKey(resp.PublicKey)
 	if err != nil {
@@ -119,20 +116,56 @@ func (k *Key) KMSKeyId() string {
 	return k.keyArn
 }
 
-func (k *Key) PublicKeyId() []byte {
-	return nil
-}
+// func (k *Key) PublicKeyId() []byte {
+// 	return nil
+// }
 
 func (k *Key) Public() crypto.PublicKey {
 	return k.pubKey
 }
 
-func (k *Key) Decrypt(_ io.Reader, msg []byte, opts crypto.DecrypterOpts) (plaintext []byte, err error) {
+func (k *Key) Decrypt(_ io.Reader, msg []byte, opts crypto.DecrypterOpts) ([]byte, error) {
 	if k.keyUsage != kmsTypes.KeyUsageTypeEncryptDecrypt {
 		return nil, ErrKeyNotEncryptDecryptError
 	}
 
-	return nil, nil
+	oaepOpts, ok := opts.(*rsa.OAEPOptions)
+	if !ok {
+		return nil, fmt.Errorf("%w: only OAEP decryption is supported", ErrUnsupportedDecryptionError)
+	}
+
+	hsh := oaepOpts.MGFHash
+	if hsh == 0 {
+		hsh = oaepOpts.Hash
+	}
+
+	var encAlg kmsTypes.EncryptionAlgorithmSpec
+
+	switch hsh {
+	case crypto.SHA1:
+		encAlg = kmsTypes.EncryptionAlgorithmSpecRsaesOaepSha1
+	case crypto.SHA256:
+		encAlg = kmsTypes.EncryptionAlgorithmSpecRsaesOaepSha256
+	default:
+
+		return nil, fmt.Errorf("%w: unsupported hashing function", ErrUnsupportedDecryptionError)
+	}
+
+	if !slices.Contains(k.encryptionAlgs, encAlg) {
+		return nil, fmt.Errorf("%w: unsupported hashing function: %v", ErrUnsupportedDecryptionError, encAlg)
+	}
+
+	resp, err := k.client.Decrypt(k.ctx, &kms.DecryptInput{
+		CiphertextBlob:      msg,
+		EncryptionAlgorithm: encAlg,
+		GrantTokens:         k.grantTokens,
+		KeyId:               &k.keyArn,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return resp.Plaintext, nil
 }
 
 func (k *Key) Sign(_ io.Reader, digest []byte, opts crypto.SignerOpts) ([]byte, error) {

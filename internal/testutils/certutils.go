@@ -13,7 +13,7 @@ func CertificateTemplate(parent *x509.Certificate, fnOpts ...func(*x509.Certific
 
 	buf := make([]byte, 32)
 
-	rand.Read(buf)
+	_, _ = rand.Read(buf)
 
 	subject := pkix.Name{
 		CommonName: hex.EncodeToString(buf),

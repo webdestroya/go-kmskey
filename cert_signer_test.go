@@ -1,4 +1,4 @@
-package kmscertsigner_test
+package kmskey_test
 
 import (
 	"context"
@@ -12,10 +12,10 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
-	"github.com/webdestroya/kmscertsigner"
-	"github.com/webdestroya/kmscertsigner/internal/testutils"
-	"github.com/webdestroya/kmscertsigner/internal/utils"
-	"github.com/webdestroya/kmscertsigner/mocks/mocksigner"
+	"github.com/webdestroya/kmskey"
+	"github.com/webdestroya/kmskey/internal/testutils"
+	"github.com/webdestroya/kmskey/internal/utils"
+	"github.com/webdestroya/kmskey/mocks/mocksigner"
 )
 
 func TestCertSigning(t *testing.T) {
@@ -91,7 +91,7 @@ func TestCertSigning(t *testing.T) {
 
 			client := mocksigner.NewMockSignerClient(t, table.privKey)
 
-			key, err := kmscertsigner.NewKey(context.Background(), "alias/blah", kmscertsigner.WithAwsClient(client))
+			key, err := kmskey.NewKey(context.Background(), "alias/blah", kmskey.WithAwsClient(client))
 			require.NoError(t, err)
 
 			opts := make([]func(*x509.Certificate), 0)
