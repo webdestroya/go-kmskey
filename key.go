@@ -15,7 +15,7 @@ import (
 
 type Key struct {
 	keyArn string
-	client awsClienter
+	client kmsClienter
 	ctx    context.Context
 
 	grantTokens []string
@@ -39,7 +39,7 @@ var (
 	_ realPrivateKey    = (*Key)(nil)
 )
 
-func NewKey(ctx context.Context, keyArn string, opts ...optionFunc) (*Key, error) {
+func NewKey(ctx context.Context, keyArn string, opts ...OptionFunc) (*Key, error) {
 
 	options := kcsOption{}
 

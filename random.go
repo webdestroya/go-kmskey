@@ -1,4 +1,4 @@
-package rand
+package kmskey
 
 import (
 	"context"
@@ -10,23 +10,19 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-type awsClienter interface {
-	GenerateRandom(context.Context, *kms.GenerateRandomInput, ...func(*kms.Options)) (*kms.GenerateRandomOutput, error)
-}
-
 type Rand interface {
 	io.Reader
 	GetCustomKeyStoreId() *string
 }
 
 const (
-	maxBytes              = 1024
+	maxRandomBytes        = 1024
 	defaultMaxConcurrency = 10
 )
 
 type kmsRand struct {
 	ctx    context.Context
-	client awsClienter
+	client kmsClienter
 
 	customKeyStoreId *string
 	maxConcurrency   int
@@ -45,12 +41,12 @@ func (k *kmsRand) Read(b []byte) (int, error) {
 		return 0, nil
 	}
 
-	if k.client == nil {
-		return 0, errors.New("aws client not provided")
-	}
+	// if k.client == nil {
+	// 	return 0, errors.New("aws client not provided")
+	// }
 
 	// they want less than the limit
-	if numBytes <= maxBytes {
+	if numBytes <= maxRandomBytes {
 		buf, err := k.read(k.ctx, numBytes)
 		if err != nil {
 			return 0, err
@@ -58,8 +54,8 @@ func (k *kmsRand) Read(b []byte) (int, error) {
 		return copy(b, buf), nil
 	}
 
-	loopCt := numBytes / maxBytes
-	if numBytes%maxBytes != 0 {
+	loopCt := numBytes / maxRandomBytes
+	if numBytes%maxRandomBytes != 0 {
 		loopCt += 1
 	}
 
@@ -69,9 +65,9 @@ func (k *kmsRand) Read(b []byte) (int, error) {
 	for i := 0; i < loopCt; i++ {
 		eg.Go(func() error {
 
-			bytesToGet := maxBytes
-			if (i+1)*maxBytes > numBytes {
-				bytesToGet = numBytes - (i * maxBytes)
+			bytesToGet := maxRandomBytes
+			if (i+1)*maxRandomBytes > numBytes {
+				bytesToGet = numBytes - (i * maxRandomBytes)
 			}
 
 			data, err := k.read(ctx, bytesToGet)
@@ -79,7 +75,7 @@ func (k *kmsRand) Read(b []byte) (int, error) {
 				return err
 			}
 
-			copy(b[i*maxBytes:(i*maxBytes)+bytesToGet], data)
+			copy(b[i*maxRandomBytes:(i*maxRandomBytes)+bytesToGet], data)
 
 			return nil
 		})
@@ -108,15 +104,27 @@ func (k *kmsRand) GetCustomKeyStoreId() *string {
 	return k.customKeyStoreId
 }
 
-func New(ctx context.Context, optFns ...optionFunc) Rand {
-	r := &kmsRand{
-		ctx:            ctx,
+func NewRandom(ctx context.Context, optFns ...OptionFunc) (Rand, error) {
+	opts := kcsOption{
 		maxConcurrency: defaultMaxConcurrency,
 	}
 
 	for _, optFn := range optFns {
-		optFn(r)
+		if err := optFn(&opts); err != nil {
+			return nil, err
+		}
 	}
 
-	return r
+	r := &kmsRand{
+		ctx:              ctx,
+		client:           opts.awsClient,
+		maxConcurrency:   opts.maxConcurrency,
+		customKeyStoreId: opts.customKeyStoreId,
+	}
+
+	if r.client == nil {
+		return nil, errors.New("aws client not provided")
+	}
+
+	return r, nil
 }

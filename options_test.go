@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-var _ awsClienter = (*kms.Client)(nil)
+var _ kmsClienter = (*kms.Client)(nil)
 
 func TestWithSigningAlgorithm(t *testing.T) {
 	o := kcsOption{}

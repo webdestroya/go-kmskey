@@ -1,14 +1,14 @@
-package rand_test
+package kmskey_test
 
 import (
 	"context"
 	"crypto/rsa"
 
 	"github.com/aws/aws-sdk-go-v2/config"
-	"github.com/webdestroya/go-kmskey/rand"
+	"github.com/webdestroya/go-kmskey"
 )
 
-func Example() {
+func ExampleNewRandom() {
 
 	ctx := context.Background()
 
@@ -17,7 +17,10 @@ func Example() {
 		panic(err)
 	}
 
-	kmsrand := rand.New(ctx, rand.WithAwsConfig(cfg))
+	kmsrand, err := kmskey.NewRandom(ctx, kmskey.WithAwsConfig(cfg))
+	if err != nil {
+		panic(err)
+	}
 
 	// Key Generation:
 	rsaKey, err := rsa.GenerateKey(kmsrand, 3072)

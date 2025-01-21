@@ -78,6 +78,44 @@ func main() {
   // You can do something with the certificate now, like sign other leaf certificates
 
 }
+```
+
+### Secure Random Data
+```go
+package myapp
+
+import (
+	"context"
+	"crypto/rsa"
+
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/webdestroya/go-kmskey"
+)
+
+func Example() {
+
+	ctx := context.Background()
+
+	cfg, err := config.LoadDefaultConfig(ctx, config.WithRegion("us-east-1"))
+	if err != nil {
+		panic(err)
+	}
+
+	kmsrand, err := kmskey.NewRandom(ctx, kmskey.WithAwsConfig(cfg))
+  if err != nil {
+    panic(err)
+  }
+
+	// Key Generation:
+	rsaKey, err := rsa.GenerateKey(kmsrand, 3072)
+	if err != nil {
+		panic(err)
+	}
+
+	// do something with the new key
+	_ = rsaKey
+
+}
 
 ```
 

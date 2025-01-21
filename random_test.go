@@ -1,4 +1,4 @@
-package rand_test
+package kmskey_test
 
 import (
 	"bytes"
@@ -7,7 +7,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
-	"github.com/webdestroya/go-kmskey/rand"
+	"github.com/webdestroya/go-kmskey"
+	"github.com/webdestroya/go-kmskey/mocks/mocksigner"
 )
 
 // func FuzzRead(f *testing.F) {
@@ -42,8 +43,9 @@ func TestRead(t *testing.T) {
 	}
 
 	t.Run("zero", func(t *testing.T) {
-		m := newMockRandom(t)
-		rando := rand.New(context.Background(), rand.WithAwsClient(m))
+		m := mocksigner.NewMockRandom(t)
+		rando, err := kmskey.NewRandom(context.Background(), kmskey.WithAwsClient(m))
+		require.NoError(t, err)
 
 		n, err := rando.Read(nil)
 		require.NoError(t, err)
@@ -81,19 +83,20 @@ func TestRead(t *testing.T) {
 	})
 
 	t.Run("invalid setup", func(t *testing.T) {
-		rando := rand.New(context.Background())
-		n, err := rando.Read(make([]byte, 10))
+		res, err := kmskey.NewRandom(context.Background())
 		require.Error(t, err)
 		require.ErrorContains(t, err, "aws client not provided")
-		require.Zero(t, n)
+		require.Nil(t, res)
 	})
 
 }
 
 func validateResponse(t *testing.T, size int) []byte {
 	t.Helper()
-	m := newMockRandom(t)
-	rando := rand.New(context.Background(), rand.WithAwsClient(m))
+	m := mocksigner.NewMockRandom(t)
+	rando, err := kmskey.NewRandom(context.Background(), kmskey.WithAwsClient(m))
+	require.NoError(t, err)
+
 	buf := bytes.Repeat([]byte(`!`), size)
 
 	n, err := rando.Read(buf)

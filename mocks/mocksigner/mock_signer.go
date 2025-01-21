@@ -1,6 +1,7 @@
 package mocksigner
 
 import (
+	"bytes"
 	"context"
 	"crypto"
 	"crypto/ecdsa"
@@ -9,6 +10,7 @@ import (
 	"crypto/rsa"
 	"crypto/x509"
 	"fmt"
+	"sync/atomic"
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -17,10 +19,14 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-const defaultKeyArn = `arn:aws:kms:us-east-1:123456789012:key/00000000-0000-0000-0000-deadbeefdead`
+const (
+	defaultKeyArn = `arn:aws:kms:us-east-1:123456789012:key/00000000-0000-0000-0000-deadbeefdead`
+	randData      = `_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789`
+)
 
 type MockSignerClient struct {
 	t        *testing.T
+	reqNum   atomic.Uint32
 	privKey  crypto.Signer
 	keyUsage kmsTypes.KeyUsageType
 }
@@ -31,6 +37,15 @@ func (m *MockSignerClient) PrivateKey() crypto.Signer {
 
 func (m *MockSignerClient) Public() crypto.PublicKey {
 	return m.privKey.Public()
+}
+
+func (m *MockSignerClient) GenerateRandom(ctx context.Context, input *kms.GenerateRandomInput, _ ...func(*kms.Options)) (*kms.GenerateRandomOutput, error) {
+	bufLen := int(*input.NumberOfBytes)
+	pos := m.reqNum.Add(uint32(1))
+
+	return &kms.GenerateRandomOutput{
+		Plaintext: bytes.Repeat([]byte{randData[pos]}, bufLen),
+	}, nil
 }
 
 func (m *MockSignerClient) Decrypt(ctx context.Context, input *kms.DecryptInput, _ ...func(*kms.Options)) (*kms.DecryptOutput, error) {
@@ -213,6 +228,7 @@ func NewMockSignerClient(t *testing.T, key crypto.Signer, optFns ...optionFunc) 
 	m := &MockSignerClient{
 		t:        t,
 		privKey:  key,
+		reqNum:   atomic.Uint32{},
 		keyUsage: kmsTypes.KeyUsageTypeSignVerify,
 	}
 
@@ -261,4 +277,8 @@ func NewMockEncryptDecrypt(t *testing.T, bitSize int, opts ...optionFunc) *MockS
 	opts = append(opts, WithKeyUsage(kmsTypes.KeyUsageTypeEncryptDecrypt))
 
 	return NewMockSignerClient(t, key, opts...)
+}
+
+func NewMockRandom(t *testing.T) *MockSignerClient {
+	return NewMockSignerClient(t, nil)
 }
