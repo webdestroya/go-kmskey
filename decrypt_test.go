@@ -12,12 +12,12 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/webdestroya/go-kmskey"
 	"github.com/webdestroya/go-kmskey/internal/utils"
-	"github.com/webdestroya/go-kmskey/mocks/mocksigner"
+	"github.com/webdestroya/go-kmskey/mocks/mockkms"
 )
 
 func TestDecrypt(t *testing.T) {
 	rsaKey := utils.Must(rsa.GenerateKey(rand.Reader, 2048))
-	client := mocksigner.NewMockSignerClient(t, rsaKey, mocksigner.WithKeyUsage(kmsTypes.KeyUsageTypeEncryptDecrypt))
+	client := mockkms.NewMockSignerClient(t, rsaKey, mockkms.WithKeyUsage(kmsTypes.KeyUsageTypeEncryptDecrypt))
 
 	maxLen := rsaKey.PublicKey.Size() - 64 - 2
 	t.Log(maxLen)

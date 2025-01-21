@@ -1,4 +1,4 @@
-package mocksigner
+package mockkms
 
 import (
 	"bytes"

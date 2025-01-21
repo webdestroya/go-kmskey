@@ -8,7 +8,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 	"github.com/webdestroya/go-kmskey"
-	"github.com/webdestroya/go-kmskey/mocks/mocksigner"
+	"github.com/webdestroya/go-kmskey/mocks/mockkms"
 )
 
 // func FuzzRead(f *testing.F) {
@@ -43,7 +43,7 @@ func TestRead(t *testing.T) {
 	}
 
 	t.Run("zero", func(t *testing.T) {
-		m := mocksigner.NewMockRandom(t)
+		m := mockkms.NewMockRandom(t)
 		rando, err := kmskey.NewRandom(context.Background(), kmskey.WithAwsClient(m))
 		require.NoError(t, err)
 
@@ -93,7 +93,7 @@ func TestRead(t *testing.T) {
 
 func validateResponse(t *testing.T, size int) []byte {
 	t.Helper()
-	m := mocksigner.NewMockRandom(t)
+	m := mockkms.NewMockRandom(t)
 	rando, err := kmskey.NewRandom(context.Background(), kmskey.WithAwsClient(m))
 	require.NoError(t, err)
 

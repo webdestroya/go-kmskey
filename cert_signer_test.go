@@ -15,7 +15,7 @@ import (
 	"github.com/webdestroya/go-kmskey"
 	"github.com/webdestroya/go-kmskey/internal/testutils"
 	"github.com/webdestroya/go-kmskey/internal/utils"
-	"github.com/webdestroya/go-kmskey/mocks/mocksigner"
+	"github.com/webdestroya/go-kmskey/mocks/mockkms"
 )
 
 func TestCertSigning(t *testing.T) {
@@ -89,7 +89,7 @@ func TestCertSigning(t *testing.T) {
 	for _, table := range tables {
 		t.Run(table.label, func(t *testing.T) {
 
-			client := mocksigner.NewMockSignerClient(t, table.privKey)
+			client := mockkms.NewMockSignerClient(t, table.privKey)
 
 			key, err := kmskey.NewKey(context.Background(), "alias/blah", kmskey.WithAwsClient(client))
 			require.NoError(t, err)
